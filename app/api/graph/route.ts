@@ -46,11 +46,17 @@ export async function GET() {
     );
 
     // Format for vis-network: edges need id, from, and to
-    const edges = friendships.map((friendship) => ({
-      id: friendship.id,
-      from: friendship.initiator.ensName,
-      to: friendship.receiver.ensName,
-    }));
+    const edges = friendships.map(
+      (friendship: {
+        id: string;
+        initiator: { ensName: string | null };
+        receiver: { ensName: string | null };
+      }) => ({
+        id: friendship.id,
+        from: friendship.initiator.ensName,
+        to: friendship.receiver.ensName,
+      }),
+    );
 
     return NextResponse.json({ nodes, edges });
   } catch (error) {
