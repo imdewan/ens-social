@@ -4,6 +4,7 @@
  * No "use client" needed - all data fetching happens on server.
  */
 
+import { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -14,6 +15,16 @@ import {
 
 interface ProfilePageProps {
   params: Promise<{ ens: string }>;
+}
+
+export async function generateMetadata({
+  params,
+}: ProfilePageProps): Promise<Metadata> {
+  const { ens } = await params;
+  const ensName = decodeURIComponent(ens);
+  return {
+    title: ensName,
+  };
 }
 
 export default async function ProfilePage({ params }: ProfilePageProps) {
