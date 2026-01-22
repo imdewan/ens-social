@@ -14,6 +14,7 @@ export default function SearchPage() {
   const router = useRouter();
   const [ensName, setEnsName] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +32,7 @@ export default function SearchPage() {
       return;
     }
 
+    setLoading(true);
     router.push(`/profile/${encodeURIComponent(trimmed)}`);
   };
 
@@ -56,16 +58,18 @@ export default function SearchPage() {
               value={ensName}
               onChange={(e) => setEnsName(e.target.value)}
               placeholder="vitalik.eth"
-              className="w-full px-4 py-3 border border-black focus:outline-none focus:ring-2 focus:ring-black"
+              disabled={loading}
+              className="w-full px-4 py-3 border border-black focus:outline-none focus:ring-2 focus:ring-black disabled:opacity-50"
             />
             {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
           </div>
 
           <button
             type="submit"
-            className="w-full px-4 py-3 bg-black text-white font-medium hover:bg-gray-800 transition-colors"
+            disabled={loading}
+            className="w-full px-4 py-3 bg-black text-white font-medium hover:bg-gray-800 transition-colors disabled:opacity-50"
           >
-            View Profile
+            {loading ? "Loading..." : "View Profile"}
           </button>
         </form>
       </div>
