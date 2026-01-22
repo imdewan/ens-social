@@ -1,9 +1,15 @@
+/**
+ * Social Graph page - Client Component.
+ * "use client" required for vis-network (DOM manipulation) and interactive state.
+ * Fetches graph data from API and renders interactive network visualization.
+ */
+
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Network, Options, Node, Edge } from "vis-network";
-import { DataSet } from "vis-data";
+import dynamic from "next/dynamic";
+import Link from "next/link";
 
 interface GraphNode {
   id: string;
@@ -22,50 +28,12 @@ interface GraphData {
   edges: GraphEdge[];
 }
 
-const networkOptions: Options = {
-  nodes: {
-    shape: "dot",
-    size: 20,
-    font: {
-      size: 14,
-      color: "#000",
-    },
-    color: {
-      border: "#000",
-      background: "#fff",
-      highlight: {
-        border: "#000",
-        background: "#e5e5e5",
-      },
-      hover: {
-        border: "#000",
-        background: "#f5f5f5",
-      },
-    },
-    borderWidth: 2,
-  },
-  edges: {
-    width: 1,
-    color: { color: "#000", highlight: "#000", hover: "#666" },
-  },
-  physics: {
-    stabilization: { iterations: 100 },
-    barnesHut: {
-      gravitationalConstant: -3000,
-      springConstant: 0.04,
-    },
-  },
-  interaction: {
-    hover: true,
-    tooltipDelay: 200,
-    multiselect: true,
-  },
-};
-
 export default function GraphPage() {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
-  const networkRef = useRef<Network | null>(null);
+  const networkRef = useRef<unknown>(null);
+
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,9 +41,16 @@ export default function GraphPage() {
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<GraphEdge | null>(null);
 
+  // Form state for adding friendships
   const [ensFrom, setEnsFrom] = useState("");
   const [ensTo, setEnsTo] = useState("");
 
+  // Only run client-side code after mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Fetch graph data from API
   const fetchGraphData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -94,6 +69,7 @@ export default function GraphPage() {
     }
   }, []);
 
+  // Check if friendship already exists (either direction)
   const friendshipExists = useCallback(
     (from: string, to: string): boolean => {
       if (!graphData) return false;
@@ -105,11 +81,13 @@ export default function GraphPage() {
     [graphData],
   );
 
+  // Create friendship via API
   const createFriendship = useCallback(
     async (from: string, to: string, skipConfirm = false) => {
       const trimmedFrom = from.trim().toLowerCase();
       const trimmedTo = to.trim().toLowerCase();
 
+      // Client-side validation
       if (!trimmedFrom || !trimmedTo) {
         setError("Both ENS names are required");
         return;
@@ -166,6 +144,7 @@ export default function GraphPage() {
     [friendshipExists, fetchGraphData],
   );
 
+  // Delete friendship via API
   const deleteFriendship = useCallback(
     async (from: string, to: string, skipConfirm = false) => {
       if (!skipConfirm) {
@@ -202,6 +181,7 @@ export default function GraphPage() {
     [fetchGraphData],
   );
 
+  // Delete user via API (cascades to friendships)
   const deleteUser = useCallback(
     async (ensName: string) => {
       const confirmed = confirm(
@@ -264,19 +244,54 @@ export default function GraphPage() {
     }
   };
 
+  // Render vis-network graph - only on client side
   const renderGraph = useCallback(
-    (data: GraphData) => {
-      if (!containerRef.current) return;
+    async (data: GraphData) => {
+      if (!containerRef.current || !mounted) return;
 
+      // Dynamic import vis-network only on client
+      const { Network } = await import("vis-network");
+      const { DataSet } = await import("vis-data");
+
+      // Clean up previous network instance
       if (networkRef.current) {
-        networkRef.current.destroy();
+        (networkRef.current as { destroy: () => void }).destroy();
         networkRef.current = null;
       }
 
       if (data.nodes.length === 0) return;
 
-      const nodesDataSet = new DataSet<Node>(data.nodes as Node[]);
-      const edgesDataSet = new DataSet<Edge>(data.edges as Edge[]);
+      // vis-network configuration for black/white minimal styling
+      const networkOptions = {
+        nodes: {
+          shape: "dot",
+          size: 20,
+          font: { size: 14, color: "#000" },
+          color: {
+            border: "#000",
+            background: "#fff",
+            highlight: { border: "#000", background: "#e5e5e5" },
+            hover: { border: "#000", background: "#f5f5f5" },
+          },
+          borderWidth: 2,
+        },
+        edges: {
+          width: 1,
+          color: { color: "#000", highlight: "#000", hover: "#666" },
+        },
+        physics: {
+          stabilization: { iterations: 100 },
+          barnesHut: { gravitationalConstant: -3000, springConstant: 0.04 },
+        },
+        interaction: {
+          hover: true,
+          tooltipDelay: 200,
+          multiselect: true,
+        },
+      };
+
+      const nodesDataSet = new DataSet(data.nodes);
+      const edgesDataSet = new DataSet(data.edges);
 
       const network = new Network(
         containerRef.current,
@@ -284,11 +299,12 @@ export default function GraphPage() {
         networkOptions,
       );
 
-      network.on("click", (params) => {
+      // Handle click events for selection
+      network.on("click", (params: { nodes: string[]; edges: string[] }) => {
         if (params.nodes.length > 0) {
-          handleNodeClick(params.nodes[0] as string);
+          handleNodeClick(params.nodes[0]);
         } else if (params.edges.length > 0) {
-          handleEdgeClick(params.edges[0] as string);
+          handleEdgeClick(params.edges[0]);
         } else {
           setSelectedNode(null);
           setSelectedEdge(null);
@@ -297,23 +313,28 @@ export default function GraphPage() {
 
       networkRef.current = network;
     },
-    [handleNodeClick, handleEdgeClick],
+    [mounted, handleNodeClick, handleEdgeClick],
   );
 
+  // Fetch data on mount
   useEffect(() => {
-    fetchGraphData();
-  }, [fetchGraphData]);
+    if (mounted) {
+      fetchGraphData();
+    }
+  }, [mounted, fetchGraphData]);
 
+  // Re-render graph when data changes
   useEffect(() => {
-    if (graphData) {
+    if (graphData && mounted) {
       renderGraph(graphData);
     }
-  }, [graphData, renderGraph]);
+  }, [graphData, mounted, renderGraph]);
 
+  // Cleanup network on unmount
   useEffect(() => {
     return () => {
       if (networkRef.current) {
-        networkRef.current.destroy();
+        (networkRef.current as { destroy: () => void }).destroy();
       }
     };
   }, []);
@@ -323,6 +344,13 @@ export default function GraphPage() {
   return (
     <main className="min-h-screen bg-white text-black p-8">
       <div className="max-w-4xl mx-auto">
+        <Link
+          href="/"
+          className="text-sm text-gray-600 hover:text-black mb-6 block"
+        >
+          &larr; Back to home
+        </Link>
+
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-medium">ENS Graph</h1>
           <button
@@ -346,6 +374,7 @@ export default function GraphPage() {
           </div>
         )}
 
+        {/* Add friendship form */}
         <div className="mb-6 p-4 border border-black">
           <h2 className="font-medium mb-3">Add Friendship</h2>
           <form onSubmit={handleFormSubmit} className="flex gap-3 flex-wrap">
@@ -377,6 +406,7 @@ export default function GraphPage() {
           </p>
         </div>
 
+        {/* Selected node actions */}
         {selectedNode && (
           <div className="mb-6 p-4 border border-black flex items-center justify-between flex-wrap gap-3">
             <div>
@@ -416,6 +446,7 @@ export default function GraphPage() {
           </div>
         )}
 
+        {/* Selected edge actions */}
         {selectedEdge && (
           <div className="mb-6 p-4 border border-black flex items-center justify-between flex-wrap gap-3">
             <div>
@@ -442,7 +473,8 @@ export default function GraphPage() {
           </div>
         )}
 
-        {!loading && !hasNodes && (
+        {/* Empty state */}
+        {mounted && !loading && !hasNodes && (
           <div className="text-center py-12 text-gray-600 border border-dashed border-gray-300">
             <p className="mb-2">No friendships yet.</p>
             <p className="text-sm">
@@ -451,11 +483,13 @@ export default function GraphPage() {
           </div>
         )}
 
+        {/* Graph container */}
         <div
           ref={containerRef}
           className={`w-full border border-black ${hasNodes ? "h-[500px]" : "h-0 border-0"}`}
         />
 
+        {/* Help text */}
         {hasNodes && (
           <div className="mt-4 text-sm text-gray-600 space-y-1">
             <p>

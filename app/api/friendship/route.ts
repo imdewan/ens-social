@@ -1,3 +1,9 @@
+/**
+ * Friendship API routes.
+ * POST: Create a friendship between two ENS names (validates ENS on-chain first).
+ * DELETE: Remove an existing friendship.
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { resolveENSName } from "@/lib/ens/resolver";
@@ -7,6 +13,10 @@ interface FriendshipRequest {
   receiver: string;
 }
 
+/**
+ * Find existing user or create new one after validating ENS resolves on-chain.
+ * Throws if ENS name doesn't resolve to an address.
+ */
 async function validateAndGetOrCreateUser(ensName: string) {
   const existing = await prisma.user.findUnique({
     where: { ensName },
@@ -14,6 +24,7 @@ async function validateAndGetOrCreateUser(ensName: string) {
 
   if (existing) return existing;
 
+  // Validate ENS resolves before creating user
   const address = await resolveENSName(ensName);
 
   if (!address) {
@@ -31,6 +42,8 @@ async function validateAndGetOrCreateUser(ensName: string) {
 export async function POST(request: NextRequest) {
   try {
     const body: FriendshipRequest = await request.json();
+
+    // Normalize to lowercase for consistent storage
     const initiator = body.initiator?.trim().toLowerCase();
     const receiver = body.receiver?.trim().toLowerCase();
 
@@ -55,6 +68,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate and get/create users
     let initiatorUser, receiverUser;
     try {
       [initiatorUser, receiverUser] = await Promise.all([
@@ -66,6 +80,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: message }, { status: 400 });
     }
 
+    // Check for existing friendship in either direction
     const existingFriendship = await prisma.friendship.findFirst({
       where: {
         OR: [
@@ -113,6 +128,8 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const body: FriendshipRequest = await request.json();
+
+    // Normalize to lowercase for lookup
     const initiator = body.initiator?.trim().toLowerCase();
     const receiver = body.receiver?.trim().toLowerCase();
 
@@ -123,13 +140,10 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const initiatorUser = await prisma.user.findUnique({
-      where: { ensName: initiator },
-    });
-
-    const receiverUser = await prisma.user.findUnique({
-      where: { ensName: receiver },
-    });
+    const [initiatorUser, receiverUser] = await Promise.all([
+      prisma.user.findUnique({ where: { ensName: initiator } }),
+      prisma.user.findUnique({ where: { ensName: receiver } }),
+    ]);
 
     if (!initiatorUser || !receiverUser) {
       return NextResponse.json(
@@ -138,6 +152,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // Find friendship in either direction
     const friendship = await prisma.friendship.findFirst({
       where: {
         OR: [

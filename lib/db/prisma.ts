@@ -1,3 +1,10 @@
+/**
+ * Prisma client singleton for database access.
+ * Uses the pg adapter for Prisma 7+ compatibility with PostgreSQL.
+ * In development, the client is cached on globalThis to prevent
+ * multiple instances during hot reloading.
+ */
+
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -8,9 +15,13 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient(): PrismaClient {
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-  });
+  const connectionString = process.env.DATABASE_URL;
+
+  if (!connectionString) {
+    throw new Error("DATABASE_URL environment variable is not set");
+  }
+
+  const pool = new Pool({ connectionString });
   globalForPrisma.pool = pool;
 
   const adapter = new PrismaPg(pool);
@@ -19,6 +30,7 @@ function createPrismaClient(): PrismaClient {
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
+// Cache the client in development to avoid multiple instances
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }

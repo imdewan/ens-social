@@ -1,3 +1,9 @@
+/**
+ * ENS Search page - Client Component.
+ * "use client" required for useState and form handling.
+ * Validates input and navigates to profile page on submit.
+ */
+
 "use client";
 
 import { useState } from "react";
@@ -31,12 +37,17 @@ export default function SearchPage() {
   return (
     <main className="min-h-screen bg-white text-black flex items-center justify-center p-8">
       <div className="w-full max-w-md">
-        <Link href="/" className="text-sm text-gray-600 hover:text-black mb-8 block">
+        <Link
+          href="/"
+          className="text-sm text-gray-600 hover:text-black mb-8 block"
+        >
           &larr; Back to home
         </Link>
 
         <h1 className="text-3xl font-medium mb-2">Search ENS</h1>
-        <p className="text-gray-600 mb-8">Look up any ENS name to view their profile and records.</p>
+        <p className="text-gray-600 mb-8">
+          Look up any ENS name to view their profile and records.
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
